@@ -26,18 +26,25 @@ RUN apt-get update && apt-get install nodejs -y
 
 COPY ./requirements.txt /code/requirements.txt
 
+# Install Python dependencies as root
+RUN pip3 install --no-cache-dir --upgrade --pre -r /code/requirements.txt
+
 # Set up a new user named "user" with user ID 1000
 RUN useradd -m -u 1000 user
+
+# Create necessary directories with proper permissions
+RUN mkdir -p /home/user/app
+RUN chown -R user:user /home/user
+
 # Switch to the "user" user
 USER user
+
 # Set home to the user's home directory
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH \
     PYTHONPATH=$HOME/app \
     PYTHONUNBUFFERED=1 \
     SYSTEM=spaces
-
-RUN pip3 install --no-cache-dir --upgrade --pre -r /code/requirements.txt
 
 # Set the working directory to the user's home directory
 WORKDIR $HOME/app
