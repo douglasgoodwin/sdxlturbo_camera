@@ -6,6 +6,7 @@ ENV PYTHONUNBUFFERED=1
 ENV NODE_MAJOR=20
 ENV MODELS_DIR=/workspace/models
 
+# Install system dependencies
 RUN apt-get update && apt-get install --no-install-recommends -y \
     build-essential \
     python3.9 \
@@ -14,45 +15,50 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     git \
     ffmpeg \
     google-perftools \
-    ca-certificates curl gnupg \
+    ca-certificates \
+    curl \
+    gnupg \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /code
-
+# Install NodeJS
 RUN mkdir -p /etc/apt/keyrings 
 RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
 RUN echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list > /dev/null
 RUN apt-get update && apt-get install nodejs -y
 
+# Set working directory for installation
+WORKDIR /code
+
+# Copy requirements first for better caching
 COPY ./requirements.txt /code/requirements.txt
 
-# Install Python dependencies as root
-RUN pip3 install --no-cache-dir --upgrade --pre -r /code/requirements.txt
+# Debug the requirements file
+RUN echo "Contents of requirements.txt:" && cat /code/requirements.txt
 
-# Set up a new user named "user" with user ID 1000
+# Try to install with verbose output to see errors
+RUN pip3 install --no-cache-dir --upgrade --pre -r /code/requirements.txt -v
+
+# Set up non-root user
 RUN useradd -m -u 1000 user
 
-# Create necessary directories with proper permissions
+# Create app directory and set permissions
 RUN mkdir -p /home/user/app
-RUN chown -R user:user /home/user
+COPY --chown=user . /home/user/app
 
-# Switch to the "user" user
+# Switch to non-root user
 USER user
+WORKDIR /home/user/app
 
-# Set home to the user's home directory
+# Set environment variables for the non-root user
 ENV HOME=/home/user \
     PATH=/home/user/.local/bin:$PATH \
-    PYTHONPATH=$HOME/app \
+    PYTHONPATH=/home/user/app \
     PYTHONUNBUFFERED=1 \
-    SYSTEM=spaces
+    SYSTEM=spaces \
+    LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libtcmalloc.so.4
 
-# Set the working directory to the user's home directory
-WORKDIR $HOME/app
-
-# Copy the current directory contents into the container at $HOME/app setting the owner to the user
-COPY --chown=user . $HOME/app
-
-ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libtcmalloc.so.4
+# Make sure the script is executable
+RUN if [ -f "./build-run.sh" ]; then chmod +x ./build-run.sh; fi
 
 EXPOSE 7860
 
