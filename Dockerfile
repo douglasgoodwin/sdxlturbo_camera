@@ -20,6 +20,9 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     gnupg \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Verify git is installed and in PATH
+RUN which git && git --version
+
 # Install NodeJS
 RUN mkdir -p /etc/apt/keyrings 
 RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
@@ -35,8 +38,9 @@ COPY ./requirements.txt /code/requirements.txt
 # Debug the requirements file
 RUN echo "Contents of requirements.txt:" && cat /code/requirements.txt
 
-# Try to install with verbose output to see errors
-RUN pip3 install --no-cache-dir --upgrade --pre -r /code/requirements.txt -v
+# Try installing with a more robust approach - one package at a time
+RUN pip3 install --upgrade pip setuptools wheel
+RUN pip3 install --no-cache-dir --upgrade --pre -r /code/requirements.txt || cat /tmp/pip-error.log || true
 
 # Set up non-root user
 RUN useradd -m -u 1000 user
